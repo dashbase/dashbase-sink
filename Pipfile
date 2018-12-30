@@ -5,6 +5,9 @@ name = "pypi"
 
 [packages]
 google-cloud-storage = "*"
+google-cloud = "*"
+confluent-kafka = "*"
+msgpack = "*"
 
 [dev-packages]
 

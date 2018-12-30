@@ -20,8 +20,8 @@ $ gcloud components install beta
 ```
 gcloud beta functions deploy dash-sink --runtime python37 --trigger-resource dashbase-stackdriver-logging --trigger-event google.storage.object.finalize --entry-point hello_gcs
 ```
-
-
 ### Documents
 
 Google cloud storage trigger: https://cloud.google.com/functions/docs/calling/storage?authuser=1
+
+The event object format: https://cloud.google.com/storage/docs/json_api/v1/objects
