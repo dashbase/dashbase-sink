@@ -2,6 +2,7 @@ from google.cloud import storage
 from confluent_kafka import Producer
 from enum import Enum, unique
 import msgpack
+import struct
 
 kafka_server = '130.211.225.66'
 topic = 'test'
@@ -17,8 +18,6 @@ class ExtensionType(Enum):
 
 
 # TODO Exception Catch
-# TODO More ExtensionType
-# TODO INT LONG FLOAT DOUBLE type
 # TODO Multi Value
 # TODO add test
 class MessagePackDocBuilder:
@@ -59,10 +58,22 @@ class MessagePackDocBuilder:
         self.__dic[key] = value
         return self
 
+    def put_text_offset(self, key, start, end):
+        self.__dic[key] = self.offset_to_value(ExtensionType.TextOffset, start, end)
+        return self
+
     def put_sorted(self, key, value):
         if isinstance(value, str):
             value = value.encode()
         self.__dic[key] = msgpack.ExtType(ExtensionType.Sorted.value, value)
+        return self
+
+    def put_sorted_offset(self, key, start, end):
+        self.__dic[key] = self.offset_to_value(ExtensionType.SortedOffset, start, end)
+        return self
+
+    def put_lat_lon(self, key, lat, lon):
+        self.__dic[key] = self.lat_lon_to_value(ExtensionType.LatLon, lat, lon)
         return self
 
     def put_keyword(self, key, value):
@@ -97,6 +108,16 @@ class MessagePackDocBuilder:
             self.packer.pack(key)
             self.packer.pack(self.__dic[key])
         return self.packer.bytes()
+
+    @staticmethod
+    def offset_to_value(ext: ExtensionType, start, end):
+        bytes_array = struct.pack('>ii', start, end)
+        return msgpack.ExtType(ext.value, bytes_array)
+
+    @staticmethod
+    def lat_lon_to_value(ext: ExtensionType, lat, lon):
+        bytes_array = struct.pack('>dd', lat, lon)
+        return msgpack.ExtType(ext.value, bytes_array)
 
 
 def dash_sink(event, context):
@@ -139,9 +160,14 @@ def main():
     builder = MessagePackDocBuilder()
     builder.set_timestamp(1234)
     builder.set_raw('This is test')
-    builder.put_text('text', 'text123')
-    builder.put_int('int', 111)
-    builder.put_float('float', 12.34)
+    builder.put_text('text', 'abc')
+    builder.put_text_offset('text2', 0, 4)
+    builder.put_sorted("sorted", "abc")
+    builder.put_sorted_offset("sorted2", 8, 12)
+    builder.put_int('long', 123)
+    builder.put_double('double', 12.34)
+    builder.put_lat_lon('latlon', 12, 34)
+
     k = builder.build()
     print(k.hex())
 
