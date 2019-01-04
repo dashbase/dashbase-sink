@@ -1,9 +1,57 @@
 from google.cloud import storage
 from confluent_kafka import Producer
+from enum import Enum, unique
 import msgpack
 
 kafka_server = '130.211.225.66'
-topic='test'
+topic = 'test'
+
+
+@unique
+class ExtensionType(Enum):
+    Sorted = 0
+    Keyword = 1
+    TextOffset = 2
+    SortedOffset = 3
+    LatLon = 4
+
+
+class MessagePackDocBuilder:
+    def __init__(self):
+        self.__timestamp = ''
+        self.__raw = ''
+        self.__dic = dict()
+        self.packer = msgpack.Packer(use_bin_type=True)
+
+    def set_timestamp(self, timestamp):
+        self.__timestamp = timestamp
+        return self
+
+    def get_timestamp(self):
+        return self.__timestamp
+
+    def reset(self):
+        self.__timestamp = ''
+        self.__raw = ''
+        self.__dic = dict()
+        self.packer.reset()
+        return self
+
+    def put_text(self, key, value):
+        self.__dic[key] = value
+        return self
+
+    def put_sorted(self, key, value):
+        self.__dic[key] = msgpack.ExtType(ExtensionType.Sorted, value)
+        return self
+
+    def put_keyword(self, key, value):
+        self.__dic[key] = msgpack.ExtType(ExtensionType.Keyword, value)
+        return self
+
+    def build(self):
+        pass
+
 
 def dash_sink(event, context):
     """Triggered by a change to a Cloud Storage bucket.
@@ -17,8 +65,8 @@ def dash_sink(event, context):
     logs = data.split('\n')
     producer = get_producer(kafka_server)
     for log in logs:
-        msgpack_log=msgpack.packb(log,use_bin_type=True)
-        produce_data(producer,topic,msgpack_log,key='key')
+        msgpack_log = msgpack.packb(log, use_bin_type=True)
+        produce_data(producer, topic, msgpack_log, key='key')
     producer.flush()
     print("Process data successfully!")
 
@@ -42,9 +90,11 @@ def produce_data(producer, topic, data, key=None):
 
 
 def main():
-    global kafka_server
-    kafka_server = 'localhost'
-    dash_sink({'name': 'web/2018/12/30/00:00:00_00:59:59_S0.json'}, None)
+    test = ExtensionType.Sorted
+    print(isinstance(0, ExtensionType))
+    # global kafka_server
+    # kafka_server = 'localhost'
+    # dash_sink({'name': 'web/2018/12/30/00:00:00_00:59:59_S0.json'}, None)
 
 
 if __name__ == '__main__':
