@@ -17,18 +17,32 @@ class ExtensionType(Enum):
 
 
 class MessagePackDocBuilder:
+    # TODO Exception Catch
+    # TODO More ExtensionType
+    # TODO INT LONG FLOAT DOUBLE type
+    # TODO Multi Value
     def __init__(self):
         self.__timestamp = ''
         self.__raw = ''
         self.__dic = dict()
-        self.packer = msgpack.Packer(use_bin_type=True)
+        self.packer = msgpack.Packer(use_bin_type=True, autoreset=False)
 
     def set_timestamp(self, timestamp):
+        timestamp = int(timestamp)
         self.__timestamp = timestamp
         return self
 
     def get_timestamp(self):
         return self.__timestamp
+
+    def set_raw(self, raw):
+        if isinstance(raw, str):
+            raw = raw.encode()
+        self.__raw = raw
+        return self
+
+    def get_raw(self):
+        return self.__raw
 
     def reset(self):
         self.__timestamp = ''
@@ -38,19 +52,30 @@ class MessagePackDocBuilder:
         return self
 
     def put_text(self, key, value):
+        if isinstance(value, str):
+            value = value.encode()
         self.__dic[key] = value
         return self
 
     def put_sorted(self, key, value):
-        self.__dic[key] = msgpack.ExtType(ExtensionType.Sorted, value)
+        if isinstance(value, str):
+            value = value.encode()
+        self.__dic[key] = msgpack.ExtType(ExtensionType.Sorted.value, value)
         return self
 
     def put_keyword(self, key, value):
-        self.__dic[key] = msgpack.ExtType(ExtensionType.Keyword, value)
+        if isinstance(value, str):
+            value = value.encode()
+        self.__dic[key] = msgpack.ExtType(ExtensionType.Keyword.value, value)
         return self
 
     def build(self):
-        pass
+        self.packer.reset()
+        self.packer.pack(self.__timestamp)
+        self.packer.pack(self.__raw)
+        for key in self.__dic.keys():
+            self.packer.pack(self.__dic[key])
+        return self.packer.bytes()
 
 
 def dash_sink(event, context):
@@ -90,8 +115,12 @@ def produce_data(producer, topic, data, key=None):
 
 
 def main():
-    test = ExtensionType.Sorted
-    print(isinstance(0, ExtensionType))
+    builder = MessagePackDocBuilder()
+    builder.set_timestamp(1234)
+    builder.set_raw('This is test')
+    k = builder.build().hex()
+    print(k)
+    
     # global kafka_server
     # kafka_server = 'localhost'
     # dash_sink({'name': 'web/2018/12/30/00:00:00_00:59:59_S0.json'}, None)
