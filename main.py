@@ -16,11 +16,13 @@ class ExtensionType(Enum):
     LatLon = 4
 
 
+# TODO Exception Catch
+# TODO More ExtensionType
+# TODO INT LONG FLOAT DOUBLE type
+# TODO Multi Value
+# TODO add test
 class MessagePackDocBuilder:
-    # TODO Exception Catch
-    # TODO More ExtensionType
-    # TODO INT LONG FLOAT DOUBLE type
-    # TODO Multi Value
+
     def __init__(self):
         self.__timestamp = ''
         self.__raw = ''
@@ -69,11 +71,30 @@ class MessagePackDocBuilder:
         self.__dic[key] = msgpack.ExtType(ExtensionType.Keyword.value, value)
         return self
 
+    def put_int(self, key, value):
+        self.__dic[key] = value
+        return self
+
+    def put_long(self, key, value):
+        self.__dic[key] = value
+        return self
+
+    def put_float(self, key, value):
+        # It is precise, same as double in JAVA
+        self.__dic[key] = float(value)
+        return self
+
+    def put_double(self, key, value):
+        # There is no double type in python, use float() here
+        self.__dic[key] = float(value)
+        return self
+
     def build(self):
         self.packer.reset()
         self.packer.pack(self.__timestamp)
         self.packer.pack(self.__raw)
         for key in self.__dic.keys():
+            self.packer.pack(key)
             self.packer.pack(self.__dic[key])
         return self.packer.bytes()
 
@@ -118,9 +139,12 @@ def main():
     builder = MessagePackDocBuilder()
     builder.set_timestamp(1234)
     builder.set_raw('This is test')
-    k = builder.build().hex()
-    print(k)
-    
+    builder.put_text('text', 'text123')
+    builder.put_int('int', 111)
+    builder.put_float('float', 12.34)
+    k = builder.build()
+    print(k.hex())
+
     # global kafka_server
     # kafka_server = 'localhost'
     # dash_sink({'name': 'web/2018/12/30/00:00:00_00:59:59_S0.json'}, None)
