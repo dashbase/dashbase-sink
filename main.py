@@ -3,9 +3,33 @@ from confluent_kafka import Producer
 from enum import Enum, unique
 import msgpack
 import struct
+import ujson
 
 kafka_server = '130.211.225.66'
 topic = 'test'
+
+# Is the nested map supported?
+schema = {
+    "logName": "sorted",
+    "resource": {
+        "sorted",
+    },
+    "timestamp": "int",
+    "receiveTimestamp": "int",
+    "severity": "keyword",
+    "insertId": "sorted",
+    "httpRequest": "text",
+    "labels": "text",
+    "metadata": "text",
+    "operation": "text",
+    "trace": "sorted",
+    "spanId": "sorted",
+    "traceSampled": "sorted",
+    "sourceLocation": "text",
+    "protoPayload": "text",
+    "textPayload": "text",
+    "jsonPayload": "text",
+}
 
 
 @unique
@@ -171,9 +195,22 @@ def dash_sink(event, context):
     data = get_blob_data(bucket_name='dashbase-stackdriver-logging', source_blob_name=file['name']).decode()
     logs = data.split('\n')
     producer = get_producer(kafka_server)
+    builder = MessagePackDocBuilder()
     for log in logs:
-        msgpack_log = msgpack.packb(log, use_bin_type=True)
-        produce_data(producer, topic, msgpack_log, key='key')
+        logEntry = ujson.loads(log)
+        for key in logEntry.keys():
+            dashbase_type = schema[key]
+            if dashbase_type is 'int':
+                builder.put_int(key, logEntry[key])
+            elif dashbase_type is 'text':
+                builder.put_text(key, logEntry[key])
+            elif dashbase_type is 'double':
+                builder.put_double(key, logEntry[key])
+            elif dashbase_type is 'sorted':
+                builder.put_sorted(key, logEntry[key])
+            elif dashbase_type is 'keyword':
+                builder.put_keyword(key, logEntry[key])
+        produce_data(producer, topic, builder.build(), key='key')
     producer.flush()
     print("Process data successfully!")
 

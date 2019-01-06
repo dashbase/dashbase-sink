@@ -8,6 +8,7 @@ google-cloud-storage = "*"
 google-cloud = "*"
 confluent-kafka = "*"
 msgpack = "*"
+ujson = "*"
 
 [dev-packages]
 
