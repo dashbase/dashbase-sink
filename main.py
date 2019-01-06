@@ -18,7 +18,6 @@ class ExtensionType(Enum):
 
 
 # TODO Exception Catch
-# TODO Multi Value
 # TODO add test
 class MessagePackDocBuilder:
 
@@ -53,50 +52,70 @@ class MessagePackDocBuilder:
         return self
 
     def put_text(self, key, value):
-        if isinstance(value, str):
-            value = value.encode()
+        value = self.value_to_bytes(value)
+        if key in self.__dic.keys():
+            value = self.add_multi_value(self.__dic[key], value)
         self.__dic[key] = value
         return self
 
     def put_text_offset(self, key, start, end):
-        self.__dic[key] = self.offset_to_value(ExtensionType.TextOffset, start, end)
+        value = self.offset_to_value(ExtensionType.TextOffset, start, end)
+        if key in self.__dic.keys():
+            value = self.add_multi_value(self.__dic[key], value)
+        self.__dic[key] = value
         return self
 
     def put_sorted(self, key, value):
-        if isinstance(value, str):
-            value = value.encode()
-        self.__dic[key] = msgpack.ExtType(ExtensionType.Sorted.value, value)
+        value = msgpack.ExtType(ExtensionType.Sorted.value, self.value_to_bytes(value))
+        if key in self.__dic.keys():
+            value = self.add_multi_value(self.__dic[key], value)
+        self.__dic[key] = value
         return self
 
     def put_sorted_offset(self, key, start, end):
-        self.__dic[key] = self.offset_to_value(ExtensionType.SortedOffset, start, end)
+        value = self.offset_to_value(ExtensionType.SortedOffset, start, end)
+        if key in self.__dic.keys():
+            value = self.add_multi_value(self.__dic[key], value)
+        self.__dic[key] = value
         return self
 
     def put_lat_lon(self, key, lat, lon):
-        self.__dic[key] = self.lat_lon_to_value(ExtensionType.LatLon, lat, lon)
+        value = self.lat_lon_to_value(ExtensionType.LatLon, lat, lon)
+        if key in self.__dic.keys():
+            value = self.add_multi_value(self.__dic[key], value)
+        self.__dic[key] = value
         return self
 
     def put_keyword(self, key, value):
-        if isinstance(value, str):
-            value = value.encode()
-        self.__dic[key] = msgpack.ExtType(ExtensionType.Keyword.value, value)
+        value = msgpack.ExtType(ExtensionType.Keyword.value, self.value_to_bytes(value))
+        if key in self.__dic.keys():
+            value = self.add_multi_value(self.__dic[key], value)
+        self.__dic[key] = value
         return self
 
     def put_int(self, key, value):
+        if key in self.__dic.keys():
+            value = self.add_multi_value(self.__dic[key], value)
         self.__dic[key] = value
         return self
 
     def put_long(self, key, value):
+        if key in self.__dic.keys():
+            value = self.add_multi_value(self.__dic[key], value)
         self.__dic[key] = value
         return self
 
     def put_float(self, key, value):
         # It is precise, same as double in JAVA
+        if key in self.__dic.keys():
+            value = self.add_multi_value(self.__dic[key], value)
         self.__dic[key] = float(value)
         return self
 
     def put_double(self, key, value):
         # There is no double type in python, use float() here
+        if key in self.__dic.keys():
+            value = self.add_multi_value(self.__dic[key], value)
         self.__dic[key] = float(value)
         return self
 
@@ -106,7 +125,13 @@ class MessagePackDocBuilder:
         self.packer.pack(self.__raw)
         for key in self.__dic.keys():
             self.packer.pack(key)
-            self.packer.pack(self.__dic[key])
+            value = self.__dic[key]
+            if isinstance(value, list):
+                self.packer.pack_array_header(len(value))
+                for v in value:
+                    self.packer.pack(v)
+            else:
+                self.packer.pack(self.__dic[key])
         return self.packer.bytes()
 
     @staticmethod
@@ -119,7 +144,22 @@ class MessagePackDocBuilder:
         bytes_array = struct.pack('>dd', lat, lon)
         return msgpack.ExtType(ext.value, bytes_array)
 
+    @staticmethod
+    def value_to_bytes(value):
+        if isinstance(value, bytes):
+            return value
+        return str(value).encode()
 
+    @staticmethod
+    def add_multi_value(pre_value, value):
+        if isinstance(pre_value, list):
+            pre_value.append(value)
+            return pre_value
+        value_list = [pre_value, value]
+        return value_list
+
+
+# TODO parse gcloud log entry
 def dash_sink(event, context):
     """Triggered by a change to a Cloud Storage bucket.
     Args:
