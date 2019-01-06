@@ -25,3 +25,5 @@ gcloud beta functions deploy dash-sink --runtime python37 --trigger-resource das
 Google cloud storage trigger: https://cloud.google.com/functions/docs/calling/storage?authuser=1
 
 The event object format: https://cloud.google.com/storage/docs/json_api/v1/objects
+
+The log entry format: https://cloud.google.com/logging/docs/reference/v2/rest/v2/LogEntry
