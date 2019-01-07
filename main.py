@@ -3,7 +3,7 @@ from confluent_kafka import Producer
 from enum import Enum, unique
 import msgpack
 import struct
-import ujson
+import ujson, zulu
 
 kafka_server = '130.211.225.66'
 topic = 'test'
@@ -11,9 +11,7 @@ topic = 'test'
 # Is the nested map supported?
 schema = {
     "logName": "sorted",
-    "resource": {
-        "sorted",
-    },
+    "resource": "text",
     "timestamp": "int",
     "receiveTimestamp": "int",
     "severity": "keyword",
@@ -60,23 +58,21 @@ class MessagePackDocBuilder:
         return self.__timestamp
 
     def set_raw(self, raw):
-        if isinstance(raw, str):
-            raw = raw.encode()
-        self.__raw = raw
+        self.__raw = str(raw)
         return self
 
     def get_raw(self):
         return self.__raw
 
     def reset(self):
-        self.__timestamp = ''
+        self.__timestamp = 0
         self.__raw = ''
         self.__dic = dict()
         self.packer.reset()
         return self
 
     def put_text(self, key, value):
-        value = self.value_to_bytes(value)
+        value = str(value)
         if key in self.__dic.keys():
             value = self.add_multi_value(self.__dic[key], value)
         self.__dic[key] = value
@@ -118,12 +114,14 @@ class MessagePackDocBuilder:
         return self
 
     def put_int(self, key, value):
+        value = int(value)
         if key in self.__dic.keys():
             value = self.add_multi_value(self.__dic[key], value)
         self.__dic[key] = value
         return self
 
     def put_long(self, key, value):
+        value = int(value)
         if key in self.__dic.keys():
             value = self.add_multi_value(self.__dic[key], value)
         self.__dic[key] = value
@@ -131,6 +129,7 @@ class MessagePackDocBuilder:
 
     def put_float(self, key, value):
         # It is precise, same as double in JAVA
+        value = float(value)
         if key in self.__dic.keys():
             value = self.add_multi_value(self.__dic[key], value)
         self.__dic[key] = float(value)
@@ -138,6 +137,7 @@ class MessagePackDocBuilder:
 
     def put_double(self, key, value):
         # There is no double type in python, use float() here
+        value = float(value)
         if key in self.__dic.keys():
             value = self.add_multi_value(self.__dic[key], value)
         self.__dic[key] = float(value)
@@ -155,7 +155,7 @@ class MessagePackDocBuilder:
                 for v in value:
                     self.packer.pack(v)
             else:
-                self.packer.pack(self.__dic[key])
+                self.packer.pack(value)
         return self.packer.bytes()
 
     @staticmethod
@@ -197,19 +197,27 @@ def dash_sink(event, context):
     producer = get_producer(kafka_server)
     builder = MessagePackDocBuilder()
     for log in logs:
+        builder.reset()
         logEntry = ujson.loads(log)
         for key in logEntry.keys():
             dashbase_type = schema[key]
+            value = logEntry[key]
+            if key == 'timestamp':
+                value = zulu.parse(value).timestamp()
+                builder.set_timestamp(value)
+                continue
+            if key == 'receiveTimestamp':
+                value = zulu.parse(value).timestamp()
             if dashbase_type is 'int':
-                builder.put_int(key, logEntry[key])
+                builder.put_int(key, value)
             elif dashbase_type is 'text':
-                builder.put_text(key, logEntry[key])
+                builder.put_text(key, value)
             elif dashbase_type is 'double':
-                builder.put_double(key, logEntry[key])
+                builder.put_double(key, value)
             elif dashbase_type is 'sorted':
-                builder.put_sorted(key, logEntry[key])
+                builder.put_sorted(key, value)
             elif dashbase_type is 'keyword':
-                builder.put_keyword(key, logEntry[key])
+                builder.put_keyword(key, value)
         produce_data(producer, topic, builder.build(), key='key')
     producer.flush()
     print("Process data successfully!")
