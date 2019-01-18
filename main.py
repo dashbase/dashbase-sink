@@ -192,7 +192,7 @@ def dash_sink(event, context):
     """
     file = event
     print(f"Processing file: {file['name']}.")
-    data = get_blob_data(bucket_name='dashbase-stackdriver-logging', source_blob_name=file['name']).decode()
+    data = get_blob_data(bucket_name='dashbase-stackdriver-logging', source_blob_name=file['name']).decode().strip()
     logs = data.split('\n')
     producer = get_producer(kafka_server)
     builder = MessagePackDocBuilder()
@@ -220,7 +220,6 @@ def dash_sink(event, context):
                 builder.put_keyword(key, value)
         produce_data(producer, topic, builder.build(), key='key')
     producer.flush()
-    print("Process data successfully!")
 
 
 def get_blob_data(bucket_name, source_blob_name):
