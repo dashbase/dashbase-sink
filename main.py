@@ -2,9 +2,10 @@ from google.cloud import storage
 from confluent_kafka import Producer
 from dashsink_utils.MessagePackBuilder import MessagePackDocBuilder
 import ujson, zulu
+import os
 
-kafka_server = '130.211.225.66'
-topic = 'test'
+kafka_host = os.environ.get('KAFKA_HOST', 'localhost:9092')
+topic = os.environ.get('KAFKA_TOPIC', 'DASHBASE')
 
 # Is the nested map supported?
 schema = {
@@ -39,7 +40,7 @@ def dash_sink(event, context):
     print(f"Processing file: {file['name']}.")
     data = get_blob_data(bucket_name='dashbase-stackdriver-logging', source_blob_name=file['name']).decode().strip()
     logs = data.split('\n')
-    producer = get_producer(kafka_server)
+    producer = get_producer(kafka_host)
     builder = MessagePackDocBuilder()
     for log in logs:
         builder.reset()
@@ -75,8 +76,8 @@ def get_blob_data(bucket_name, source_blob_name):
     return blob.download_as_string()
 
 
-def get_producer(server, port='9092'):
-    conf = {'bootstrap.servers': '{}:{}'.format(kafka_server, port), 'client.id': 'test', 'default.topic.config': {'acks': 'all'}}
+def get_producer(host):
+    conf = {'bootstrap.servers': '{}'.format(host), 'client.id': 'test', 'default.topic.config': {'acks': 'all'}}
     producer = Producer(conf)
     return producer
 
