@@ -1,10 +1,14 @@
 from __future__ import print_function
 from confluent_kafka import Producer
+from dashsink_utils.MessagePackBuilder import MessagePackDocBuilder
 import boto3
 import zlib
 import os
 import time
+import ujson
+import zulu
 
+schema = {}
 s3 = boto3.client('s3')
 kafka_host = os.environ.get('KAFKA_HOST', 'localhost:9092')
 topic = os.environ.get('KAFKA_TOPIC', 'DASHBASE')
@@ -21,7 +25,6 @@ def produce_data(producer, topic, data, key=None):
     producer.produce(topic, key=key, value=data)
 
 
-# TODO serialize data
 def handler(event, context):
     for record in event['Records']:
         start_time = time.time()
@@ -48,11 +51,33 @@ def handler(event, context):
         print("=>   split time: {}s".format(time.time() - start_time))
         try:
             producer = get_producer(kafka_host)
+            builder = MessagePackDocBuilder()
             for line in lines:
-                produce_data(producer, topic, line)
+                builder.reset()
+                logEntry = ujson.loads(line)
+                for key in logEntry.keys():
+                    dashbase_type = schema[key]
+                    value = logEntry[key]
+                    if key == 'timestamp':
+                        value = zulu.parse(value).timestamp()
+                        builder.set_timestamp(value)
+                        continue
+                    if key == 'receiveTimestamp':
+                        value = zulu.parse(value).timestamp()
+                    if dashbase_type is 'int':
+                        builder.put_int(key, value)
+                    elif dashbase_type is 'text':
+                        builder.put_text(key, value)
+                    elif dashbase_type is 'double':
+                        builder.put_double(key, value)
+                    elif dashbase_type is 'sorted':
+                        builder.put_sorted(key, value)
+                    elif dashbase_type is 'keyword':
+                        builder.put_keyword(key, value)
+                produce_data(producer, topic, builder.build(), key='key')
+            producer.flush()
             print("=>   send usage time: {}s".format(time.time() - start_time))
             print("s3 file:{} transfer to kafka successful ".format(key))
-
             return key
         except Exception as e:
             raise e
