@@ -1,6 +1,7 @@
 from google.cloud import storage
 from confluent_kafka import Producer
 from dashsink_utils.MessagePackBuilder import MessagePackDocBuilder
+from dashsink_utils.schema.GoogleCloudLogEntrySchema import logEntrySchema
 import ujson, zulu
 import os
 
@@ -8,25 +9,7 @@ kafka_host = os.environ.get('KAFKA_HOST', 'localhost:9092')
 topic = os.environ.get('KAFKA_TOPIC', 'DASHBASE')
 
 # Is the nested map supported?
-schema = {
-    "logName": "sorted",
-    "resource": "text",
-    "timestamp": "int",
-    "receiveTimestamp": "int",
-    "severity": "keyword",
-    "insertId": "sorted",
-    "httpRequest": "text",
-    "labels": "text",
-    "metadata": "text",
-    "operation": "text",
-    "trace": "sorted",
-    "spanId": "sorted",
-    "traceSampled": "sorted",
-    "sourceLocation": "text",
-    "protoPayload": "text",
-    "textPayload": "text",
-    "jsonPayload": "text",
-}
+schema = logEntrySchema
 
 
 # TODO parse gcloud log entry
@@ -46,7 +29,10 @@ def dash_sink(event, context):
         builder.reset()
         logEntry = ujson.loads(log)
         for key in logEntry.keys():
-            dashbase_type = schema[key]
+            if key in schema.keys():
+                dashbase_type = schema[key]
+            else:
+                dashbase_type = 'text'
             value = logEntry[key]
             if key == 'timestamp':
                 value = zulu.parse(value).timestamp()

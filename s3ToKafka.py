@@ -1,6 +1,7 @@
 from __future__ import print_function
 from confluent_kafka import Producer
 from dashsink_utils.MessagePackBuilder import MessagePackDocBuilder
+from dashsink_utils.schema.CloudTrailSchema import cloudTrailSchema
 import boto3
 import zlib
 import os
@@ -8,7 +9,7 @@ import time
 import ujson
 import zulu
 
-schema = {}
+schema = cloudTrailSchema
 s3 = boto3.client('s3')
 kafka_host = os.environ.get('KAFKA_HOST', 'localhost:9092')
 topic = os.environ.get('KAFKA_TOPIC', 'DASHBASE')
@@ -56,7 +57,10 @@ def handler(event, context):
                 builder.reset()
                 logEntry = ujson.loads(line)
                 for key in logEntry.keys():
-                    dashbase_type = schema[key]
+                    if key in schema.keys():
+                        dashbase_type = schema[key]
+                    else:
+                        dashbase_type = 'text'
                     value = logEntry[key]
                     if key == 'timestamp':
                         value = zulu.parse(value).timestamp()
