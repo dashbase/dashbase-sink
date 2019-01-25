@@ -1,0 +1,1 @@
+gcloud beta functions deploy dash-sink-test --env-vars-file .env.yaml  --runtime python37 --trigger-resource dashbase-stackdriver-logging --trigger-event google.storage.object.finalize --entry-point dash_sink
