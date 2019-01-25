@@ -5,9 +5,8 @@ from dashsink_utils.schema.GoogleCloudLogEntrySchema import logEntrySchema
 import ujson, zulu
 import os
 
-kafka_host = os.environ.get('KAFKA_HOST', 'localhost:9092')
-topic = os.environ.get('KAFKA_TOPIC', 'DASHBASE')
-
+kafka_host = os.environ.get('KAFKA_HOST', '35.247.63.148:9092')
+topic = os.environ.get('KAFKA_TOPIC', 'gcloud-sink')
 # Is the nested map supported?
 schema = logEntrySchema
 
@@ -21,24 +20,28 @@ def dash_sink(event, context):
     """
     file = event
     print(f"Processing file: {file['name']}.")
+    print(f"KafkaHost: {kafka_host}, Topic: {topic}")
     data = get_blob_data(bucket_name='dashbase-stackdriver-logging', source_blob_name=file['name']).decode().strip()
     logs = data.split('\n')
     producer = get_producer(kafka_host)
     builder = MessagePackDocBuilder()
     for log in logs:
         builder.reset()
-        logEntry = ujson.loads(log)
+        try:
+            logEntry = ujson.loads(log)
+        except Exception as e:
+            raise e
         for key in logEntry.keys():
             if key in schema.keys():
                 dashbase_type = schema[key]
             else:
                 dashbase_type = 'text'
             value = logEntry[key]
-            if key == 'timestamp':
+            if key is 'timestamp':
                 value = zulu.parse(value).timestamp()
                 builder.set_timestamp(value)
                 continue
-            if key == 'receiveTimestamp':
+            if key is 'receiveTimestamp':
                 value = zulu.parse(value).timestamp()
             if dashbase_type is 'int':
                 builder.put_int(key, value)
@@ -69,7 +72,7 @@ def get_producer(host):
 
 
 def produce_data(producer, topic, data, key=None):
-    producer.produce(topic, key=key, value=data)
+    producer.produce(topic=topic, key=key, value=data)
 
 
 def main():
@@ -83,10 +86,8 @@ def main():
     builder.put_int('long', 123)
     builder.put_double('double', 12.34)
     builder.put_lat_lon('latlon', 12, 34)
-
     k = builder.build()
-    print(k.hex())
-
+    dash_sink({'file': '1'}, 1)
     # global kafka_server
     # kafka_server = 'localhost'
     # dash_sink({'name': 'web/2018/12/30/00:00:00_00:59:59_S0.json'}, None)
