@@ -27,6 +27,7 @@ def dash_sink(event, context):
     builder = MessagePackDocBuilder()
     for log in logs:
         builder.reset()
+        builder.set_raw(log)
         try:
             logEntry = ujson.loads(log)
         except Exception as e:
