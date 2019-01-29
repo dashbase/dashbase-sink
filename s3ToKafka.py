@@ -70,7 +70,7 @@ def handler(event, context):
                     else:
                         dashbase_type = 'text'
                     value = logEntry[key]
-                    if key == 'timestamp':
+                    if key == 'eventTime':
                         value = zulu.parse(value).timestamp()
                         builder.set_timestamp(value)
                         continue
