@@ -66,26 +66,9 @@ def handler(event, context):
                     raise e
                 for key in logEntry.keys():
                     if key in schema.keys():
-                        dashbase_type = schema[key]
+                        flatten(builder, key, logEntry[key], schema[key])
                     else:
-                        dashbase_type = 'text'
-                    value = logEntry[key]
-                    if key == 'eventTime':
-                        value = zulu.parse(value).timestamp()
-                        builder.set_timestamp(value)
-                        continue
-                    if key == 'receiveTimestamp':
-                        value = zulu.parse(value).timestamp()
-                    if dashbase_type is 'int':
-                        builder.put_int(key, value)
-                    elif dashbase_type is 'text':
-                        builder.put_text(key, value)
-                    elif dashbase_type is 'double':
-                        builder.put_double(key, value)
-                    elif dashbase_type is 'sorted':
-                        builder.put_sorted(key, value)
-                    elif dashbase_type is 'keyword':
-                        builder.put_keyword(key, value)
+                        flatten(builder, key, logEntry[key], "text")
                 produce_data(producer, topic, builder.build(), key='key')
             producer.flush()
             print("=>   send usage time: {}s".format(time.time() - start_time))
@@ -93,3 +76,33 @@ def handler(event, context):
             return key
         except Exception as e:
             raise e
+
+
+def flatten(builder, prefix, value, dashbase_type):
+    if isinstance(value, dict):
+        for key in value.keys():
+            if key in dashbase_type.keys():
+                flatten(builder, "{}.{}".format(prefix, key), value[key], dashbase_type[key])
+            else:
+                flatten(builder, "{}.{}".format(prefix, key), value[key], "text")
+    elif isinstance(value, list):
+        for v in value:
+            pack(builder, prefix, v, dashbase_type)
+    else:
+        pack(builder, prefix, value, dashbase_type)
+        
+
+def pack(builder, key, value, dashbase_type):
+    if key == 'eventTime':
+        value = zulu.parse(value).timestamp()
+        builder.set_timestamp(value)
+    if dashbase_type is 'int':
+        builder.put_int(key, value)
+    elif dashbase_type is 'text':
+        builder.put_text(key, value)
+    elif dashbase_type is 'double':
+        builder.put_double(key, value)
+    elif dashbase_type is 'sorted':
+        builder.put_sorted(key, value)
+    elif dashbase_type is 'keyword':
+        builder.put_keyword(key, value)
