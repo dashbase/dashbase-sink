@@ -15,13 +15,14 @@ kafka_host = os.environ.get('KAFKA_HOST', '35.247.63.148:9092')
 topic = os.environ.get('KAFKA_TOPIC', 'aws-cloudTrail')
 print('Loading function host:{} topic:{}', kafka_host, topic)
 
+
 def get_producer(host):
     producer = KafkaProducer(bootstrap_servers=[host])
     return producer
 
 
 def produce_data(producer, topic, data, key=None):
-    producer.send(topic,data)
+    producer.send(topic, data)
 
 
 def handler(event, context):
@@ -46,7 +47,12 @@ def handler(event, context):
                 print("=>   gzip decompress usage time: {}s".format(time.time() - start_time))
             except zlib.error:
                 print("Content couldn't be ungzipped, assuming plain text")
-        lines = data.splitlines()
+
+        try:
+            lines = json.loads(data)['Records']
+        except Exception as e:
+            lines = data.splitlines()
+
         print("=>   split time: {}s".format(time.time() - start_time))
         try:
             producer = get_producer(kafka_host)
