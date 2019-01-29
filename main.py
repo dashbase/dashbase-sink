@@ -34,28 +34,45 @@ def dash_sink(event, context):
             raise e
         for key in logEntry.keys():
             if key in schema.keys():
-                dashbase_type = schema[key]
+                flatten(builder, key, logEntry[key], schema[key])
             else:
-                dashbase_type = 'text'
-            value = logEntry[key]
-            if key is 'timestamp':
-                value = zulu.parse(value).timestamp()
-                builder.set_timestamp(value)
-                continue
-            if key is 'receiveTimestamp':
-                value = zulu.parse(value).timestamp()
-            if dashbase_type is 'int':
-                builder.put_int(key, value)
-            elif dashbase_type is 'text':
-                builder.put_text(key, value)
-            elif dashbase_type is 'double':
-                builder.put_double(key, value)
-            elif dashbase_type is 'sorted':
-                builder.put_sorted(key, value)
-            elif dashbase_type is 'keyword':
-                builder.put_keyword(key, value)
+                flatten(builder, key, logEntry[key], "text")
+
         produce_data(producer, topic, builder.build(), key='key')
     producer.flush()
+
+
+def flatten(builder, prefix, value, dashbase_type):
+    if isinstance(value, dict):
+        for key in value.keys():
+            if isinstance(dashbase_type, dict) and key in dashbase_type.keys():
+                flatten(builder, "{}.{}".format(prefix, key), value[key], dashbase_type[key])
+            else:
+                flatten(builder, "{}.{}".format(prefix, key), value[key], "text")
+    elif isinstance(value, list):
+        for v in value:
+            pack(builder, prefix, v, dashbase_type)
+    else:
+        pack(builder, prefix, value, dashbase_type)
+
+
+def pack(builder, key, value, dashbase_type):
+    if key == 'timestamp':
+        value = zulu.parse(value).timestamp()
+        builder.set_timestamp(value)
+        return
+    if key == 'receiveTimestamp':
+        value = zulu.parse(value).timestamp()
+    if dashbase_type is 'int':
+        builder.put_int(key, value)
+    elif dashbase_type is 'text':
+        builder.put_text(key, value)
+    elif dashbase_type is 'double':
+        builder.put_double(key, value)
+    elif dashbase_type is 'sorted':
+        builder.put_sorted(key, value)
+    elif dashbase_type is 'keyword':
+        builder.put_keyword(key, value)
 
 
 def get_blob_data(bucket_name, source_blob_name):
