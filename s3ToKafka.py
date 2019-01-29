@@ -61,7 +61,10 @@ def handler(event, context):
                 builder.reset()
                 builder.set_raw(line)
                 try:
-                    logEntry = json.loads(line)
+                    if isinstance(line, dict):
+                        logEntry = line
+                    else:
+                        logEntry = json.loads(line)
                 except Exception as e:
                     raise e
                 for key in logEntry.keys():
@@ -81,7 +84,7 @@ def handler(event, context):
 def flatten(builder, prefix, value, dashbase_type):
     if isinstance(value, dict):
         for key in value.keys():
-            if key in dashbase_type.keys():
+            if isinstance(dashbase_type,dict) and key in dashbase_type.keys():
                 flatten(builder, "{}.{}".format(prefix, key), value[key], dashbase_type[key])
             else:
                 flatten(builder, "{}.{}".format(prefix, key), value[key], "text")
@@ -90,7 +93,7 @@ def flatten(builder, prefix, value, dashbase_type):
             pack(builder, prefix, v, dashbase_type)
     else:
         pack(builder, prefix, value, dashbase_type)
-        
+
 
 def pack(builder, key, value, dashbase_type):
     if key == 'eventTime':
