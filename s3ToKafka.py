@@ -1,29 +1,27 @@
 from __future__ import print_function
-from confluent_kafka import Producer
 from dashsink_utils.MessagePackBuilder import MessagePackDocBuilder
 from dashsink_utils.schema.CloudTrailSchema import cloudTrailSchema
+from kafka import KafkaProducer
 import boto3
 import zlib
 import os
 import time
-import ujson
 import zulu
+import json
 
 schema = cloudTrailSchema
 s3 = boto3.client('s3')
-kafka_host = os.environ.get('KAFKA_HOST', 'localhost:9092')
-topic = os.environ.get('KAFKA_TOPIC', 'DASHBASE')
+kafka_host = os.environ.get('KAFKA_HOST', '35.247.63.148:9092')
+topic = os.environ.get('KAFKA_TOPIC', 'aws-cloudTrail')
 print('Loading function host:{} topic:{}', kafka_host, topic)
 
-
 def get_producer(host):
-    conf = {'bootstrap.servers': '{}'.format(host), 'client.id': 'test', 'default.topic.config': {'acks': 'all'}}
-    producer = Producer(conf)
+    producer = KafkaProducer(bootstrap_servers=[host])
     return producer
 
 
 def produce_data(producer, topic, data, key=None):
-    producer.produce(topic, key=key, value=data)
+    producer.send(topic,data)
 
 
 def handler(event, context):
@@ -55,7 +53,11 @@ def handler(event, context):
             builder = MessagePackDocBuilder()
             for line in lines:
                 builder.reset()
-                logEntry = ujson.loads(line)
+                builder.set_raw(line)
+                try:
+                    logEntry = json.loads(line)
+                except Exception as e:
+                    raise e
                 for key in logEntry.keys():
                     if key in schema.keys():
                         dashbase_type = schema[key]
