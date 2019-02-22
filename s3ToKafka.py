@@ -99,6 +99,7 @@ def pack(builder, key, value, dashbase_type):
     if key == 'eventTime':
         value = zulu.parse(value).timestamp()
         builder.set_timestamp(value)
+        return
     if dashbase_type is 'int':
         builder.put_int(key, value)
     elif dashbase_type is 'text':
