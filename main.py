@@ -5,12 +5,14 @@ from dashsink_utils.schema.GoogleCloudLogEntrySchema import logEntrySchema
 import ujson, zulu
 import os
 import requests
+import urllib3
+from urllib3.exceptions import InsecureRequestWarning
 
 kafka_host = os.environ.get('KAFKA_HOST', '35.247.63.148:9092')
 topic = os.environ.get('KAFKA_TOPIC', 'gcloud-sink')
 # Is the nested map supported?
 schema = logEntrySchema
-
+urllib3.disable_warnings(InsecureRequestWarning)
 
 # TODO parse gcloud log entry
 def dash_sink_with_kafka(event, context):
@@ -68,7 +70,6 @@ def post_bulk(data):
         'cache-control': 'no-cache'
     }
     r = requests.post(url, data=data, headers=headers, verify=False)
-    print(f"Bulk result:", r.status_code)
 
 def flatten(builder, prefix, value, dashbase_type):
     if isinstance(value, dict):
