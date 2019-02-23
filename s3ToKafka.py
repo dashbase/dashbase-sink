@@ -8,6 +8,7 @@ import os
 import time
 import zulu
 import json
+import requests
 
 schema = cloudTrailSchema
 s3 = boto3.client('s3')
@@ -25,7 +26,7 @@ def produce_data(producer, topic, data, key=None):
     producer.send(topic, data)
 
 
-def handler(event, context):
+def handler_kafka(event, context):
     for record in event['Records']:
         start_time = time.time()
         bucket = record['s3']['bucket']['name']
@@ -75,10 +76,70 @@ def handler(event, context):
                 produce_data(producer, topic, builder.build(), key='key')
             producer.flush()
             print("=>   send usage time: {}s".format(time.time() - start_time))
-            print("s3 file:{} transfer to kafka successful ".format(key))
-            return key
         except Exception as e:
             raise e
+
+def handler(event, context):
+    for record in event['Records']:
+        start_time = time.time()
+        bucket = record['s3']['bucket']['name']
+        key = record['s3']['object']['key']
+        try:
+            response = s3.get_object(Bucket=bucket, Key=key)
+            body = response['Body']
+            data = body.read()
+        except Exception as e:
+            print(e)
+            print('Error getting object {} from bucket {}. '.format(key, bucket))
+            raise e
+
+        print("=>   download usage time: {}s".format(time.time() - start_time))
+        if key.endswith(".gz"):
+            try:
+                data = zlib.decompress(data, 16 + zlib.MAX_WBITS)
+                print("Detected gzipped content")
+                print("=>   gzip decompress usage time: {}s".format(time.time() - start_time))
+            except zlib.error:
+                print("Content couldn't be ungzipped, assuming plain text")
+
+        try:
+            lines = json.loads(data)['Records']
+        except Exception as e:
+            lines = data.splitlines()
+
+        print("=>   split time: {}s".format(time.time() - start_time))
+        try:
+            index = '{"index": { "_index": "cloudtrail", "_type": "trail"}}\n'
+            bulk_request=''
+            for i in range(0,len(lines),1):
+                line=lines[i]
+                try:
+                    if isinstance(line, dict):
+                        logEntry = json.dumps(line)
+                    else:
+                        logEntry = line.strip()
+                except Exception as e:
+                    raise e
+                bulk_request += index + logEntry + '\n'
+                if (i + 1) % 100 == 0:
+                    post_bulk(bulk_request.strip())
+                    bulk_request = ''
+            post_bulk(bulk_request.strip())
+            print("=>   send usage time: {}s".format(time.time() - start_time))
+            print("All the steps finished")
+        except Exception as e:
+            raise e
+
+def post_bulk(data):
+    if data=='':
+        return
+    url = 'https://35.247.115.177:31514/_bulk'
+    headers = {
+        'content-type': 'application/json',
+        'cache-control': 'no-cache'
+    }
+    r = requests.post(url, data=data, headers=headers, verify=False)
+    print(f"Bulk result:", r.status_code)
 
 
 def flatten(builder, prefix, value, dashbase_type):
