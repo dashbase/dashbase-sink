@@ -9,12 +9,16 @@ import time
 import zulu
 import json
 import requests
+import base64
+import urllib3
+from urllib3.exceptions import InsecureRequestWarning
 
 schema = cloudTrailSchema
 s3 = boto3.client('s3')
 kafka_host = os.environ.get('KAFKA_HOST', '35.247.63.148:9092')
 topic = os.environ.get('KAFKA_TOPIC', 'aws-cloudTrail')
 print('Loading function host:{} topic:{}', kafka_host, topic)
+urllib3.disable_warnings(InsecureRequestWarning)
 
 
 def get_producer(host):
@@ -26,7 +30,7 @@ def produce_data(producer, topic, data, key=None):
     producer.send(topic, data)
 
 
-def handler_kafka(event, context):
+def s3ToKafka(event, context):
     for record in event['Records']:
         start_time = time.time()
         bucket = record['s3']['bucket']['name']
@@ -79,7 +83,8 @@ def handler_kafka(event, context):
         except Exception as e:
             raise e
 
-def handler(event, context):
+
+def s3ToDashbase(event, context):
     for record in event['Records']:
         start_time = time.time()
         bucket = record['s3']['bucket']['name']
@@ -110,9 +115,9 @@ def handler(event, context):
         print("=>   split time: {}s".format(time.time() - start_time))
         try:
             index = '{"index": { "_index": "cloudtrail", "_type": "trail"}}\n'
-            bulk_request=''
-            for i in range(0,len(lines),1):
-                line=lines[i]
+            bulk_request = ''
+            for i in range(0, len(lines), 1):
+                line = lines[i]
                 try:
                     if isinstance(line, dict):
                         logEntry = json.dumps(line)
@@ -130,8 +135,33 @@ def handler(event, context):
         except Exception as e:
             raise e
 
+
+def cloudwatchToDashbase(event, context):
+    rawData = event['awslogs']['data']
+    data = json.loads(zlib.decompress(base64.b64decode(rawData), 16 + zlib.MAX_WBITS))
+    logs = data.pop('logEvents')
+    index = '{"index": { "_index": "cloudtrail", "_type": "trailToDashbase"}}\n'
+    bulk_request = ''
+    for i in range(0, len(logs), 1):
+        log = logs[i]
+        try:
+            log['message'] = json.loads(log['message'])
+        except Exception as e:
+            pass
+        if isinstance(log['message'], dict):
+            message = log.pop('message')
+            log.update(message)
+        log.update(data)
+        bulk_request += index + json.dumps(log) + '\n'
+        if (i + 1) % 100 == 0:
+            post_bulk(bulk_request.strip())
+            bulk_request = ''
+    post_bulk(bulk_request.strip())
+    print("All the logs processed")
+
+
 def post_bulk(data):
-    if data=='':
+    if data == '':
         return
     url = 'https://35.247.115.177:31514/_bulk'
     headers = {
@@ -145,7 +175,7 @@ def post_bulk(data):
 def flatten(builder, prefix, value, dashbase_type):
     if isinstance(value, dict):
         for key in value.keys():
-            if isinstance(dashbase_type,dict) and key in dashbase_type.keys():
+            if isinstance(dashbase_type, dict) and key in dashbase_type.keys():
                 flatten(builder, "{}.{}".format(prefix, key), value[key], dashbase_type[key])
             else:
                 flatten(builder, "{}.{}".format(prefix, key), value[key], "text")
