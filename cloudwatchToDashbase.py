@@ -17,6 +17,9 @@ schema = cloudTrailSchema
 s3 = boto3.client('s3')
 kafka_host = os.environ.get('KAFKA_HOST', '35.247.63.148:9092')
 topic = os.environ.get('KAFKA_TOPIC', 'aws-cloudTrail')
+es_host=os.environ.get('ES_HOST','localhost:9200')
+es_index=os.environ.get('ES_INDEX','test_index')
+es_subTable=os.environ.get('ES_SUBTABLE','test_table')
 print('Loading function host:{} topic:{}', kafka_host, topic)
 urllib3.disable_warnings(InsecureRequestWarning)
 
@@ -114,7 +117,7 @@ def s3ToDashbase(event, context):
 
         print("=>   split time: {}s".format(time.time() - start_time))
         try:
-            index = '{"index": { "_index": "cloudtrail", "_type": "trail"}}\n'
+            index = '{"index": { "_index": "%s", "_type": "%s"}}\n'%(es_index, es_subTable)
             bulk_request = ''
             for i in range(0, len(lines), 1):
                 line = lines[i]
@@ -140,36 +143,47 @@ def cloudwatchToDashbase(event, context):
     rawData = event['awslogs']['data']
     data = json.loads(zlib.decompress(base64.b64decode(rawData), 16 + zlib.MAX_WBITS))
     logs = data.pop('logEvents')
-    index = '{"index": { "_index": "cloudtrail", "_type": "trailToDashbase"}}\n'
+    index = '{"index": { "_index": "%s", "_type": "%s"}}\n' % (es_index, es_subTable)
     bulk_request = ''
+    succ = 0
+    fail = 0
     for i in range(0, len(logs), 1):
         log = logs[i]
         try:
             log['message'] = json.loads(log['message'])
         except Exception as e:
-            pass
+            print(e.__str__())
         if isinstance(log['message'], dict):
             message = log.pop('message')
             log.update(message)
         log.update(data)
         bulk_request += index + json.dumps(log) + '\n'
         if (i + 1) % 100 == 0:
-            post_bulk(bulk_request.strip())
+            num1, num2 = post_bulk(bulk_request.strip())
+            succ += num1
+            fail += num2
             bulk_request = ''
-    post_bulk(bulk_request.strip())
-    print("All the logs processed")
+    num1, num2 = post_bulk(bulk_request.strip())
+    succ += num1
+    fail += num2
+    print("Successful items:{}",succ)
+    print("Failed items:{}", fail)
 
 
 def post_bulk(data):
     if data == '':
         return
-    url = 'https://35.247.115.177:31514/_bulk'
+    url = '{}/_bulk'.format(es_host)
     headers = {
         'content-type': 'application/json',
         'cache-control': 'no-cache'
     }
     r = requests.post(url, data=data, headers=headers, verify=False)
+    res = r.json()
+    items = res['items']
+    failed = list(map(lambda x: x['index']['status'] >= 300, items)).count(True)
     print(f"Bulk result:", r.status_code)
+    return len(items) - failed, failed
 
 
 def flatten(builder, prefix, value, dashbase_type):
