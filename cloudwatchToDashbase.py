@@ -1,6 +1,7 @@
 from __future__ import print_function
 from dashsink_utils.MessagePackBuilder import MessagePackDocBuilder
 from dashsink_utils.schema.CloudTrailSchema import cloudTrailSchema
+from dashsink_utils.templates.cloudtrail import cloudtrail_template
 from kafka import KafkaProducer
 import boto3
 import zlib
@@ -17,12 +18,11 @@ schema = cloudTrailSchema
 s3 = boto3.client('s3')
 kafka_host = os.environ.get('KAFKA_HOST', '35.247.63.148:9092')
 topic = os.environ.get('KAFKA_TOPIC', 'aws-cloudTrail')
-es_host=os.environ.get('ES_HOST','localhost:9200')
-es_index=os.environ.get('ES_INDEX','test_index')
-es_subTable=os.environ.get('ES_SUBTABLE','test_table')
+es_host = os.environ.get('ES_HOST', 'localhost:9200')
+es_index = os.environ.get('ES_INDEX', 'test_index')
+es_subTable = os.environ.get('ES_SUBTABLE', 'test_table')
 print('Loading function host:{} topic:{}', kafka_host, topic)
 urllib3.disable_warnings(InsecureRequestWarning)
-
 
 def get_producer(host):
     producer = KafkaProducer(bootstrap_servers=[host])
@@ -117,7 +117,7 @@ def s3ToDashbase(event, context):
 
         print("=>   split time: {}s".format(time.time() - start_time))
         try:
-            index = '{"index": { "_index": "%s", "_type": "%s"}}\n'%(es_index, es_subTable)
+            index = '{"index": { "_index": "%s", "_type": "%s"}}\n' % (es_index, es_subTable)
             bulk_request = ''
             for i in range(0, len(lines), 1):
                 line = lines[i]
@@ -144,6 +144,8 @@ def cloudwatchToDashbase(event, context):
     data = json.loads(zlib.decompress(base64.b64decode(rawData), 16 + zlib.MAX_WBITS))
     logs = data.pop('logEvents')
     index = '{"index": { "_index": "%s", "_type": "%s"}}\n' % (es_index, es_subTable)
+    template = cloudtrail_template % es_index
+    put_template(template)
     bulk_request = ''
     succ = 0
     fail = 0
@@ -166,7 +168,7 @@ def cloudwatchToDashbase(event, context):
     num1, num2 = post_bulk(bulk_request.strip())
     succ += num1
     fail += num2
-    print("Successful items:{}",succ)
+    print("Successful items:{}", succ)
     print("Failed items:{}", fail)
 
 
@@ -215,3 +217,14 @@ def pack(builder, key, value, dashbase_type):
         builder.put_sorted(key, value)
     elif dashbase_type is 'keyword':
         builder.put_keyword(key, value)
+
+
+def put_template(template):
+    url = '%s/_template/%s'%(es_host,es_index)
+    headers = {
+        'content-type': 'application/json',
+        'cache-control': 'no-cache'
+    }
+    r = requests.put(url, data=template, headers=headers, verify=False)
+    print("Put template result: ",r.content)
+    return

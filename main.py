@@ -2,6 +2,7 @@ from google.cloud import storage
 from confluent_kafka import Producer
 from dashsink_utils.MessagePackBuilder import MessagePackDocBuilder
 from dashsink_utils.schema.GoogleCloudLogEntrySchema import logEntrySchema
+from dashsink_utils.templates.gcloudSink import gcloud_template
 import ujson, zulu
 import os
 import requests
@@ -11,8 +12,13 @@ from urllib3.exceptions import InsecureRequestWarning
 kafka_host = os.environ.get('KAFKA_HOST', '35.247.63.148:9092')
 topic = os.environ.get('KAFKA_TOPIC', 'gcloud-sink')
 # Is the nested map supported?
+es_host = os.environ.get('ES_HOST', 'localhost:9200')
+es_index = os.environ.get('ES_INDEX', 'test_index')
+es_subTable = os.environ.get('ES_SUBTABLE', 'test_table')
+bucket_name=os.environ.get('BUCKET_NAME','dashbase-stackdriver-logging')
 schema = logEntrySchema
 urllib3.disable_warnings(InsecureRequestWarning)
+
 
 # TODO parse gcloud log entry
 def dash_sink_with_kafka(event, context):
@@ -48,28 +54,44 @@ def dash_sink_with_kafka(event, context):
 def dash_sink(event, context):
     file = event
     print(f"Processing file: {file['name']}.")
-    data = get_blob_data(bucket_name='dashbase-stackdriver-logging', source_blob_name=file['name']).decode().strip()
+    data = get_blob_data(bucket_name=bucket_name, source_blob_name=file['name']).decode().strip()
     logs = data.split('\n')
-    index = '{"index": { "_index": "gcloud-sink", "_type": "sink"}}\n'
-    bulk_request=''
-    for i in range(0,len(logs),1):
-        bulk_request +=index+logs[i]+'\n'
-        if (i+1) % 100==0:
-            post_bulk(bulk_request.strip())
-            bulk_request=''
-    post_bulk(bulk_request.strip())
+    index = '{"index": { "_index": "%s", "_type": "%s"}}\n' % (es_index, es_subTable)
+    template = gcloud_template % es_index
+    put_template(template)
     bulk_request = ''
+    succ = 0
+    fail = 0
+    for i in range(0, len(logs), 1):
+        bulk_request += index + logs[i] + '\n'
+        if (i + 1) % 100 == 0:
+            num1, num2 = post_bulk(bulk_request.strip())
+            succ += num1
+            fail += num2
+            bulk_request = ''
+    num1, num2 = post_bulk(bulk_request.strip())
+    succ += num1
+    fail += num2
+    print("Successful items:{}", succ)
+    print("Failed items:{}", fail)
     print("All the steps finished")
 
+
 def post_bulk(data):
-    if data=='':
+    if data == '':
         return
-    url = 'https://35.247.115.177:31514/_bulk'
+    url = '{}/_bulk'.format(es_host)
     headers = {
         'content-type': 'application/json',
         'cache-control': 'no-cache'
     }
     r = requests.post(url, data=data, headers=headers, verify=False)
+    res = r.json()
+    items = res['items']
+    failed = list(map(lambda x: x['index']['status'] >= 300, items)).count(True)
+    print(f"Bulk result:", r.status_code)
+    return len(items) - failed, failed
+
 
 def flatten(builder, prefix, value, dashbase_type):
     if isinstance(value, dict):
@@ -122,8 +144,19 @@ def produce_data(producer, topic, data, key=None):
     producer.produce(topic=topic, key=key, value=data)
 
 
+def put_template(template):
+    url = '%s/_template/%s' % (es_host, es_index)
+    headers = {
+        'content-type': 'application/json',
+        'cache-control': 'no-cache'
+    }
+    r = requests.put(url, data=template, headers=headers, verify=False)
+    print("Put template result: ", r.content)
+    return
+
+
 def main():
-    dash_sink(1,1)
+    dash_sink(1, 1)
 
 
 if __name__ == '__main__':

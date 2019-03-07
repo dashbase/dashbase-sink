@@ -1,6 +1,6 @@
-{
+gcloud_template='''{
   "index_patterns": [
-    "*sink*"
+    "%s"
   ],
   "mappings": {
     "_doc": {
@@ -62,4 +62,4 @@
       }
     }
   }
-}
+}'''

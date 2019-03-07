@@ -1,6 +1,6 @@
-{
+cloudtrail_template = '''{
   "index_patterns": [
-    "*trail*"
+    "%s"
   ],
   "mappings": {
     "_doc": {
@@ -57,4 +57,4 @@
       }
     }
   }
-}
+}'''
