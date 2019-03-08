@@ -75,68 +75,92 @@ So the function will do the following things:
    - As our lambda function is running on aws, we need to expose dashbase port to outside. You can use nodeport to map 7888 port to outside which is used to calling api.
 
 2. CloudWatch log configuration
+
    - If you already have some active CloudWatch logs groups configured, you can skip this step simply.
    - Click into “CloudTrail”. Create a trail and export  logs to CloudWatch logs group. You can find specific steps [here](https://docs.aws.amazon.com/awscloudtrail/latest/userguide/send-cloudtrail-events-to-cloudwatch-logs.html).
 
 3. Lambda creation
+
    - Press create lambda
+
    - Enter your function name, e.g “cloudtrailToDashbase”.
+
    - Select python3.7 as the programming language.
+
    - Create a role to let  the function have the basic permissions. You can edit the policy later when you configure your trigger.
+
+     ![img](https://lh6.googleusercontent.com/cUftBED1imG_e5PcZH--tMaFLIlWVOLvu_KFj8cKS8AEs8SjrwlsZpMyglS32fFTDbEzwkV_SWLwhHxgcY0Kwn2_KWg3_M9H5ITwBEDqibLhhwPVhNpwNlyQ5VpBnnkOG2s4TJG9)
+
    - Edit handler name to “cloudwatchToDashbase.cloudwatchToDashbase” (File name and function name). It specifies the entrypoint in lambda function.
+
    - Set environment variables
+
      - ES_HOST => Your elasticsearch cluster host.(format “http://1.1.1.1:1234”)
      - ES_INDEX => Your index in es cluster.
      - ES_SUBTABLE => Your subtable in index.
 
-4. Trigger configuration
-   - Click into the lambda function, select “CloudWatch Logs” and add it as your trigger.
-   - Select a CloudWatch log group as the input. And create a filter for it. Only logs that pass the filter will be sent to lambda function.
+     ![img](https://lh6.googleusercontent.com/gYtxiBObSdNdHke0E0DnV6YbUkYE1bK9me_h2apo_FKC-6SbxMEOV8A-NzjTiHI06ojhRZGhk48bw6n8BH1yPwj0TGwLYzpsCokzDr4iCNQMu56c2vHHZxauXvGowMefbVLYj5kP)
 
-5. Template settings
-   - Templates are stored in /PROJECT_ROOT/dashbase_utils/templates/*.py
-   - You can add/edit/remove templates as you want. There’re some sample templates and you can modify or edit them. The lambda function will update template to remote cluster automatically when it is called.
+   - Trigger configuration
 
-6. Deployment
+     - Click into the lambda function, select “CloudWatch Logs” and add it as your trigger.
+     - Select a CloudWatch log group as the input. And create a filter for it. Only logs that pass the filter will be sent to lambda function.
+
+4. Dashbase template settings
+
+   - If you want to edit template, you should clone the repo first. Templates are stored in /PROJECT_ROOT/dashbase_utils/templates/*.py. Or you can download the released zip file and change the templates.
+
+   The lambda function will update template to remote cluster automatically when it is invoked.
+
+5. Deployment
+
    - Deploy by zip file
 
      Click into the lambda configuration, and click “upload”. Then you can simply upload the zip file to deploy. Remember the following things:
-       1.  Set handler
-       2.  Set envrironment variables
+
+     1. Set handler
+     2. Set envrironment variables(mentioned in lambda creation step)
 
      And maybe you will need to modify the templates in **dashbase_utils/templates/**.
+
+     ![img](https://lh3.googleusercontent.com/s91N_6xbLLrEidBxXD0_3DcpxK9a6BQfRKcRAf4z-x0LSYh-ZG0QxXoH21mc63kbiqU2fyV-TygLA8cmrjxpUrzRWo9AgLSq8BxEz1UbWVxF2_Kp_U0YB7SfpTI6QY9EV2q03lFC)
+
    - Deploy by command line
+
      1. Install virtual environment on your computer. 
 
-       ```shell
-       pip install virtualenv
-       cd /path/to/project
-       virtualenv env
-       ```
+        ```shell
+        pip install virtualenv
+        cd /path/to/project
+        virtualenv env
+        ```
 
-       Make sure the python version is 3.7
+        Make sure the python version is 3.7
 
      2. Then you need to make sure that aws-cli has been successfully configured on your computer. Then clone the repo: https://github.com/dashbase/dashbase-sink.git
 
      3. Run command:
 
-       ```
-       sh aws-lambda-deploy.sh
-       ```
+        ```
+        sh aws-lambda-deploy.sh
+        ```
 
-        This script mainly do the following things:
-       - Activate the virtual environment
-       - Install all the requirements from requirements.txt
-       - Compress all the site-packages and source code into one zip file
-       - Upload the whole zip file to aws lambda. You should **change function name and region to your own.**
+         This script mainly do the following things:
+
+        - Activate the virtual environment
+        - Install all the requirements from requirements.txt
+        - Compress all the site-packages and source code into one zip file
+        - Upload the whole zip file to aws lambda. You should **change function name and region to your own.**
+
      4. Back to lambda configuration page, you can set the test event now. Choose event type to “cloudwatch logs” and click test to send test event to lambda.
+
      5. You can see logs on dashbase website now.
 
-
+     
 
 ## GoogleCloud Sink To Dashbase
 
-We can not directly invoke google cloud function from a log, but we can send logs to gcs, and then invoke the function(According to [this question](https://stackoverflow.com/questions/50571259/how-to-trigger-google-function-from-stackdriver-logs-similar-to-how-we-do-in-aw)).
+We can not directly invoke google cloud function from a log, however, we can send logs to gcs, and then invoke the function(According to [this question](https://stackoverflow.com/questions/50571259/how-to-trigger-google-function-from-stackdriver-logs-similar-to-how-we-do-in-aw)).
 
 ### Architecture
 
@@ -190,6 +214,8 @@ The life of a logentry:
 
      1. The filter and destination are held in an object called a **sink.**  You can  create  a sink with rest API. Make sure that you have an ‘Owner’ role or ‘Logging Admin’ role to create sinks. *Refs:*[*https://cloud.google.com/logging/docs/reference/v2/rest/v2/projects.sinks/create*](https://cloud.google.com/logging/docs/reference/v2/rest/v2/projects.sinks/create)
 
+     ![img](https://lh5.googleusercontent.com/fLDdd7L7c8Ygj9qBNE5IhiU--K3HcVBUwc1CrG_2UV_GwiK3JzZKHtXFqz7Fi874Wz5sBptbmbL3rUBL_iVD8WfgEyxcsyQRFpGK3tO7Ffc2aSykw0f6YqSGIKM6FWcVTI1qB8Us)
+
    - Add permission
 
      1. The sink that we just created may don’t have permission to write objects into the bucket. You should find one who have the **Owner** access to destination, and then add the sink's writer identity to the bucket and give it the [Storage Object Creator](https://cloud.google.com/iam/docs/understanding-roles#cloud_storage_roles) role.
@@ -199,21 +225,32 @@ The life of a logentry:
    - First you need to create a dashbase cluster and create a table.
    - As our lambda function is running on aws, we need to expose dashbase port to outside. You can use nodeport to map 7888 port to outside which is used to calling api.
 
-4. Template settings
-   - Templates are stored in /PROJECT_ROOT/dashbase_utils/templates/*.py
-   - You can add/edit/remove templates as you want. There’re some sample templates and you can modify or edit them. The lambda function will update template to remote cluster automatically when it is called.
+4. Dashbase template settings
+   - If you want to edit template, you should clone the repo first. Templates are stored in /PROJECT_ROOT/dashbase_utils/templates/*.py. Or you can download the released zip file and change the templates.
+
+   The cloud function will update template to remote cluster automatically when it is invoked
 
 5. Deployment
 
    - Deploy by zip file
 
-      - Click into the google cloud function configuration, and click “create”. Then you can simply upload the provided zip file to deploy. Remember the following things:
+      - Click into the google cloud function configuration, and click “create”. 
 
-         1. Set handler 
-         2. Set environment variables
-         
+         Configure the following things:
 
-      And if you want to change templates, maybe you should need to modify the templates in dashbase_utils/templates/.
+         1. Configure trigger to cloud storage, and the event type to “create”
+         2. Configure bucket to the bucket that you have just created to store logs
+         3. Upload the zip file, and select python3.7
+         4. Set entry point to “dash_sink”
+
+         ![img](https://lh5.googleusercontent.com/y1as9zR0ik1-G3c2XEw4JE1vOPXwsR3nl3b8DGsps9o5r3vsR9dG5jXVeD7H9j9PjOzTJB14t-TR_uU8Ox7EpBVKkOwJqsAmsmtV_gCXnMfnz0afyRVFlnodl8ZRu3jv9mAt7U71)
+
+      - Then you should set environment variables
+
+      ![img](https://lh5.googleusercontent.com/y1ZuxyHt6lzdq0PXyHrY10pCCB8l3emrrxQNp0DDfIOjf4L3szsrfnYtfZsuh2Mp0f3HWgak4EFyg2yTxITCIMdMkGNuiarBcnRWIo72INNuBpNe5KY0q5hmXHSMWEVJtN9wLmjF)
+
+      And if you want to change templates, maybe you should need to modify the templates in **dashbase_utils/templates/**.
+
    - Deploy by command line
 
       - You need to make sure that gcloud and gcloud beta have been successfully configured on your computer. Then clone the repo: https://github.com/dashbase/dashbase-sink.git
@@ -223,6 +260,7 @@ The life of a logentry:
 
       - You can see there’s a script called “gcloud-funcition-deploy.sh”. You should set the function name、trigger resource to your own names.
         Then simply run command:
+
         ```
          sh aws-lambda-deploy.sh
         ```

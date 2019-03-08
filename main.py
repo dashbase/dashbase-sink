@@ -89,7 +89,6 @@ def post_bulk(data):
     res = r.json()
     items = res['items']
     failed = list(map(lambda x: x['index']['status'] >= 300, items)).count(True)
-    print(f"Bulk result:", r.status_code)
     return len(items) - failed, failed
 
 
