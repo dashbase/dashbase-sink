@@ -53,13 +53,13 @@ Resources:
       Code:
         S3Bucket: !Ref S3BucketName
         S3Key: !Ref ZipFile
-      Description: Monitor Lambda Function
-      Handler: 'index.handler'
+      Description: Created by stack
+      Handler: 'cloudwatchToDashbase.cloudwatchToDashbase'
       MemorySize: 1536
       Role: !GetAtt 
         - LambdaExecutionRole
         - Arn
-      Runtime: Python3.7  
+      Runtime: python3.6  
       Environment:
         Variables:
             ES_HOST: !Ref HOST
